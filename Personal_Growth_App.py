@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 from datetime import date, datetime
 import streamlit.components.v1 as components
 import data_manager as dm
+import ai_utils
+import io
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Growth Engine", layout="wide", page_icon="🚀")
@@ -36,6 +38,8 @@ if 'cpa_elapsed' not in st.session_state:
     st.session_state.cpa_elapsed = 0
 if 'tech_elapsed' not in st.session_state:
     st.session_state.tech_elapsed = 0
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
 
 # --- HELPER FUNCTIONS ---
 def get_quote(api_key=None):
@@ -45,20 +49,13 @@ def get_quote(api_key=None):
         "Success is not final, failure is not fatal: it is the courage to continue that counts.",
         "Discipline is choosing between what you want now and what you want most."
     ]
-    if api_key:
-        try:
-             # In a real app, use requests.get("https://zenquotes.io/api/today") or similar
-             # For now, we return a deterministic quote
-             return quotes[date.today().day % len(quotes)]
-        except:
-            pass
+    # Simple logic: use deterministic quote unless complex logic needed
     return quotes[date.today().day % len(quotes)]
 
 def timer_component(key_prefix, label, is_running, elapsed_time):
     st.markdown(f"### {label}")
     
-    # JS-driven timer for visual updates without rerunning script
-    # This avoids the "glitchy" feeling of full page refreshes
+    # JS-driven timer
     timer_html = f"""
     <div id="timer_{key_prefix}" style="text-align: center; font-size: 3em; font-family: monospace; color: #2c3e50; background: #ecf0f1; border-radius: 10px; padding: 10px;">
         Calculating...
@@ -88,12 +85,10 @@ def timer_component(key_prefix, label, is_running, elapsed_time):
         }}
     }}
     
-    // Update every second
     setInterval(updateTimer, 1000);
-    updateTimer(); // Initial call
+    updateTimer(); 
     </script>
     """
-    
     components.html(timer_html, height=100)
 
     c1, c2, c3 = st.columns(3)
@@ -117,15 +112,14 @@ def timer_component(key_prefix, label, is_running, elapsed_time):
             st.rerun()
 
 
-# --- HEADER & NAVIGATION (Moved to Main Page for Mobile Friendliness) ---
+# --- HEADER & NAVIGATION ---
 st.title("🚀 Growth Engine")
 
-# Top Navigation (Tab based)
-tabs = st.tabs(["📊 Dashboard", "📈 Analysis", "👨‍🍳 Recipes", "🛒 Grocery", "⚙️ Settings"])
+tabs = st.tabs(["📊 Dashboard", "🏋️ Gym Tracker", "📈 Analysis", "👨‍🍳 Recipes", "🛒 Grocery", "⚙️ Settings"])
 
 with tabs[0]: # DASHBOARD
     # --- QUOTE ---
-    quote = get_quote(st.session_state.get('api_key'))
+    quote = get_quote(st.session_state.api_key)
     st.markdown(f"""
     <div class="dashboard-card" style="text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
         <h3>🌟 Quote of the Day</h3>
@@ -133,7 +127,7 @@ with tabs[0]: # DASHBOARD
     </div>
     """, unsafe_allow_html=True)
     
-    # --- METRICS ROW ---
+    # --- METRICS ---
     df = dm.load_audit_data()
     streaks = dm.calculate_streaks(df)
 
@@ -226,7 +220,83 @@ with tabs[0]: # DASHBOARD
                 dm.save_audit_data(entry)
                 st.success("✅ Progress Saved!")
 
-with tabs[1]: # ANALYSIS
+with tabs[1]: # GYM TRACKER (New)
+    st.header("🏋️ Gym Workout Tracker")
+    
+    st.markdown("### 🎙️ AI Quick Log")
+    st.info("Record your voice or type your workout to auto-fill the form below. Requires Google Gemini API Key.")
+    
+    api_key_valid = bool(st.session_state.api_key)
+    
+    # Audio Input (New Streamlit Feature)
+    audio_val = st.audio_input("Record Workout Summary")
+    
+    # Text Input fallback
+    text_val = st.text_area("Or type here...", placeholder="I did 3 sets of Bench Press at 80kg for 8 reps. Target muscle was Chest.")
+    
+    ai_data = {}
+    
+    if st.button("✨ Process with AI", disabled=not api_key_valid):
+        with st.spinner("Analyzing..."):
+            transcript = None
+            if audio_val:
+                transcript, err = ai_utils.transcribe_audio(audio_val, st.session_state.api_key)
+                if err:
+                    st.error(f"Transcription Error: {err}")
+                else:
+                    st.write(f"**Transcript:** {transcript}")
+                    text_val = transcript # use transcript for parsing
+            
+            if text_val:
+                ai_data, err = ai_utils.parse_workout_text(text_val, st.session_state.api_key)
+                if err:
+                    st.error(f"Parsing Error: {err}")
+                else:
+                    st.success("Data extracted!")
+            else:
+                st.warning("Please provide audio or text.")
+
+    st.divider()
+    st.markdown("### 📝 Log Entry")
+    
+    with st.form("gym_form"):
+        # Auto-fill logic
+        def get_val(key, default):
+            return ai_data.get(key, default) if ai_data else default
+            
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            g_date = st.date_input("Day", date.today())
+            g_exercise = st.text_input("Exercise", value=get_val("Exercise", ""))
+            g_muscle = st.text_input("Target Muscle", value=get_val("Target_Muscle", ""))
+            g_region = st.selectbox("Region", ["Upper Body", "Lower Body", "Core", "Full Body", "Cardio"], index=0) # AI mapping is harder for index, leave manual or default
+        
+        with col_g2:
+            g_sets_reps = st.text_input("Target Sets x Reps", value=get_val("Target_Sets_Reps", ""))
+            c_w1, c_w2 = st.columns(2)
+            with c_w1: g_min_w = st.number_input("Min Weight (kg)", value=float(get_val("Min_Weight", 0.0)))
+            with c_w2: g_max_w = st.number_input("Max Weight (kg)", value=float(get_val("Max_Weight", 0.0)))
+            g_reps = st.text_input("Actual Reps", value=str(get_val("Reps", "")))
+            
+        g_notes = st.text_area("Notes", value=get_val("Notes", ""))
+        
+        if st.form_submit_button("Save Workout Log"):
+            entry = {
+                "Date": str(g_date),
+                "Exercise": g_exercise,
+                "Target_Muscle": g_muscle,
+                "Region": g_region,
+                "Target_Sets_Reps": g_sets_reps,
+                "Min_Weight": g_min_w,
+                "Max_Weight": g_max_w,
+                "Reps": g_reps,
+                "Notes": g_notes
+            }
+            dm.save_workout_entry(entry)
+            st.success("Workout Logged!")
+
+
+with tabs[2]: # ANALYSIS
     st.header("📈 Deep Dive Analysis")
     
     # Audit History
@@ -234,13 +304,11 @@ with tabs[1]: # ANALYSIS
     audit_df = dm.load_audit_data()
     if not audit_df.empty:
         st.dataframe(audit_df.sort_values("Date", ascending=False), use_container_width=True)
-        
-        # Charts
+        # Charts... (Existing)
         col_charts_1, col_charts_2 = st.columns(2)
-        
         with col_charts_1:
              # 1. Study Hours Stacked Bar
-            st.write("### 📚 Study Hours Distribution")
+            st.write("### 📚 Study Hours")
             audit_df['Date'] = pd.to_datetime(audit_df['Date'])
             audit_df = audit_df.sort_values('Date')
             study_df = audit_df[['Date', 'CPA_Hours', 'Tech_AI_Hours']].melt('Date', var_name='Type', value_name='Hours')
@@ -263,33 +331,49 @@ with tabs[1]: # ANALYSIS
                 hm_df = pd.DataFrame(heatmap_data)
                 fig_hm = px.density_heatmap(hm_df, x='Date', y='Habit', z='Done', color_continuous_scale='Greens', title="Habit Heatmap")
                 st.plotly_chart(fig_hm, use_container_width=True)
-
     else:
         st.info("No audit data yet.")
         
     st.divider()
     
     # Protein History
-    st.subheader("🍗 Protein Intake History")
+    st.subheader("🍗 Protein Intake")
     p_df = dm.load_protein_log()
     if not p_df.empty:
-        # Aggregate by date
         p_df['Date'] = pd.to_datetime(p_df['Date'])
         daily_p = p_df.groupby('Date')['Protein_g'].sum().reset_index()
-        
         fig_p = px.line(daily_p, x='Date', y='Protein_g', markers=True, title="Daily Protein Intake (g)")
         fig_p.add_hline(y=150, line_dash="dash", line_color="green", annotation_text="Target (150g)")
         st.plotly_chart(fig_p, use_container_width=True)
-        
-        with st.expander("View Detailed Protein Log"):
-            st.dataframe(p_df.sort_values("Date", ascending=False), use_container_width=True)
     else:
         st.info("No protein logs yet.")
+        
+    st.divider()
+    
+    # Gym Analytics
+    st.subheader("🏋️ Gym History")
+    gym_df = dm.load_workout_log()
+    if not gym_df.empty:
+        st.dataframe(gym_df, use_container_width=True)
+        
+        # Download Button (Excel)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            gym_df.to_excel(writer, index=False, sheet_name='Workouts')
+            
+        st.download_button(
+            label="📥 Download History (Excel)",
+            data=buffer.getvalue(),
+            file_name="gym_history.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No workout logs yet.")
 
-with tabs[2]: # RECIPES
+with tabs[3]: # RECIPES
     st.header("👨‍🍳 Healthy Kitchen Vault")
     subtabs = st.tabs(["Add New Recipe", "Browse Vault"])
-
+    # ... (Existing Recipe Code) ...
     with subtabs[0]:
         with st.form("recipe_form"):
             name = st.text_input("Recipe Name")
@@ -316,10 +400,10 @@ with tabs[2]: # RECIPES
         else:
             st.info("No recipes found. Add one!")
 
-with tabs[3]: # GROCERY
+with tabs[4]: # GROCERY
     st.header("🛒 Smart Grocery List")
     recipes_df = dm.load_recipe_data()
-    
+    # ... (Existing Grocery Code) ...
     if not recipes_df.empty:
         selected = st.multiselect("Plan your meals:", recipes_df['Name'].tolist())
         if selected:
@@ -340,13 +424,15 @@ with tabs[3]: # GROCERY
     else:
         st.warning("Add recipes to the vault first!")
 
-with tabs[4]: # SETTINGS
+with tabs[5]: # SETTINGS
     st.header("⚙️ Settings")
-    st.write("Configure your external integrations here.")
-    key = st.text_input("API Key (for Quotes)", type="password", value=st.session_state.get('api_key', ''))
+    st.write("Configure external integrations.")
+    
+    # Updated Label for Clarity
+    key = st.text_input("Google Gemini API Key (for Voice/AI Features & Quotes)", type="password", value=st.session_state.api_key)
     if key:
-        st.session_state['api_key'] = key
-        st.success("API Key saved for this session.")
+        st.session_state.api_key = key
+        st.success("API Key saved!")
     
     st.divider()
-    st.sidebar.info("Navigation moved to top tabs for better mobile experience.")
+    st.sidebar.info("Navigation moved to top tabs.")
