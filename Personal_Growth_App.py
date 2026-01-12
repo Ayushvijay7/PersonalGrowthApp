@@ -117,12 +117,14 @@ def timer_component(key_prefix, label, is_running, elapsed_time):
             st.rerun()
 
 
-# --- SIDEBAR ---
-st.sidebar.title("🛠️ Growth Engine")
-nav = st.sidebar.radio("Navigate", ["Dashboard", "Recipe Vault", "Grocery List", "Settings"])
+# --- HEADER & NAVIGATION (Moved to Main Page for Mobile Friendliness) ---
+st.title("🚀 Growth Engine")
 
-if nav == "Dashboard":
-    # --- HEADER ---
+# Top Navigation (Tab based)
+tabs = st.tabs(["📊 Dashboard", "📈 Analysis", "👨‍🍳 Recipes", "🛒 Grocery", "⚙️ Settings"])
+
+with tabs[0]: # DASHBOARD
+    # --- QUOTE ---
     quote = get_quote(st.session_state.get('api_key'))
     st.markdown(f"""
     <div class="dashboard-card" style="text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
@@ -153,6 +155,30 @@ if nav == "Dashboard":
         
         with st.expander("💻 Tech AI Upskill", expanded=True):
             timer_component("tech", "Tech AI Study", st.session_state.tech_timer_running, st.session_state.tech_elapsed)
+            
+        st.subheader("🍗 Protein Tracker")
+        with st.form("protein_form"):
+            p_name = st.text_input("Food Item", placeholder="e.g. Chicken Breast")
+            c1, c2, c3 = st.columns(3)
+            with c1: p_qty = st.number_input("Qty", 0.0, step=0.5, value=1.0)
+            with c2: p_unit = st.text_input("Unit", value="pcs")
+            with c3: p_g = st.number_input("Protein (g)", 0.0, step=1.0)
+            
+            if st.form_submit_button("Add Protein"):
+                if p_name and p_g > 0:
+                    dm.save_protein_entry({
+                        "Date": str(date.today()),
+                        "Food_Name": p_name,
+                        "Quantity": p_qty,
+                        "Unit": p_unit,
+                        "Protein_g": p_g
+                    })
+                    st.success(f"Added {p_g}g protein!")
+                    st.rerun()
+
+        # Show Today's Total
+        today_protein = dm.get_daily_protein_total(str(date.today()))
+        st.metric("Today's Protein Intake", f"{today_protein}g")
 
     with col_audit:
         st.subheader("📝 Daily Audit Log")
@@ -200,44 +226,71 @@ if nav == "Dashboard":
                 dm.save_audit_data(entry)
                 st.success("✅ Progress Saved!")
 
-    # --- ANALYTICS SECTION ---
-    if not df.empty:
-        st.divider()
-        st.subheader("📈 Growth Analytics")
+with tabs[1]: # ANALYSIS
+    st.header("📈 Deep Dive Analysis")
+    
+    # Audit History
+    st.subheader("🗓️ Task History")
+    audit_df = dm.load_audit_data()
+    if not audit_df.empty:
+        st.dataframe(audit_df.sort_values("Date", ascending=False), use_container_width=True)
         
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date')
+        # Charts
+        col_charts_1, col_charts_2 = st.columns(2)
         
-        # 1. Study Hours Stacked Bar
-        st.write("### 📚 Study Hours Distribution")
-        study_df = df[['Date', 'CPA_Hours', 'Tech_AI_Hours']].melt('Date', var_name='Type', value_name='Hours')
-        fig_bar = px.bar(study_df, x='Date', y='Hours', color='Type', title="Daily Study Hours", barmode='stack')
-        st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # 2. Habit Heatmap (Simulated with Scatter for now or Heatmap if we pivot)
-        st.write("### 🔥 Habit Consistency")
-        
-        # Prepare data for heatmap: Date vs Habit
-        habit_cols = ['Gym', 'Cardio', 'Diet_Adherence', 'Dog_Walks', 'Dog_Grooming', 'Supp_Omega3']
-        # Convert boolean/counts to 1/0 for heatmap intensity
-        heatmap_data = []
-        for idx, row in df.iterrows():
-            d_str = row['Date'].strftime('%Y-%m-%d')
-            for habit in habit_cols:
-                val = 1 if row[habit] else 0
-                if habit == 'Dog_Walks' and row[habit] > 0: val = 1 # Normalize
-                heatmap_data.append({'Date': d_str, 'Habit': habit, 'Done': val})
-        
-        if heatmap_data:
-            hm_df = pd.DataFrame(heatmap_data)
-            fig_hm = px.density_heatmap(hm_df, x='Date', y='Habit', z='Done', color_continuous_scale='Greens', title="Habit Heatmap")
-            st.plotly_chart(fig_hm, use_container_width=True)
+        with col_charts_1:
+             # 1. Study Hours Stacked Bar
+            st.write("### 📚 Study Hours Distribution")
+            audit_df['Date'] = pd.to_datetime(audit_df['Date'])
+            audit_df = audit_df.sort_values('Date')
+            study_df = audit_df[['Date', 'CPA_Hours', 'Tech_AI_Hours']].melt('Date', var_name='Type', value_name='Hours')
+            fig_bar = px.bar(study_df, x='Date', y='Hours', color='Type', title="Daily Study Hours", barmode='stack')
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+        with col_charts_2:
+            # 2. Habit Heatmap
+            st.write("### 🔥 Habit Consistency")
+            habit_cols = ['Gym', 'Cardio', 'Diet_Adherence', 'Dog_Walks', 'Dog_Grooming', 'Supp_Omega3']
+            heatmap_data = []
+            for idx, row in audit_df.iterrows():
+                d_str = row['Date'].strftime('%Y-%m-%d')
+                for habit in habit_cols:
+                    val = 1 if row[habit] else 0
+                    if habit == 'Dog_Walks' and row[habit] > 0: val = 1
+                    heatmap_data.append({'Date': d_str, 'Habit': habit, 'Done': val})
+            
+            if heatmap_data:
+                hm_df = pd.DataFrame(heatmap_data)
+                fig_hm = px.density_heatmap(hm_df, x='Date', y='Habit', z='Done', color_continuous_scale='Greens', title="Habit Heatmap")
+                st.plotly_chart(fig_hm, use_container_width=True)
 
-elif nav == "Recipe Vault":
-    st.title("👨‍🍳 Healthy Kitchen Vault")
-    tab1, tab2 = st.tabs(["Add New Recipe", "Browse Vault"])
+    else:
+        st.info("No audit data yet.")
+        
+    st.divider()
+    
+    # Protein History
+    st.subheader("🍗 Protein Intake History")
+    p_df = dm.load_protein_log()
+    if not p_df.empty:
+        # Aggregate by date
+        p_df['Date'] = pd.to_datetime(p_df['Date'])
+        daily_p = p_df.groupby('Date')['Protein_g'].sum().reset_index()
+        
+        fig_p = px.line(daily_p, x='Date', y='Protein_g', markers=True, title="Daily Protein Intake (g)")
+        fig_p.add_hline(y=150, line_dash="dash", line_color="green", annotation_text="Target (150g)")
+        st.plotly_chart(fig_p, use_container_width=True)
+        
+        with st.expander("View Detailed Protein Log"):
+            st.dataframe(p_df.sort_values("Date", ascending=False), use_container_width=True)
+    else:
+        st.info("No protein logs yet.")
 
-    with tab1:
+with tabs[2]: # RECIPES
+    st.header("👨‍🍳 Healthy Kitchen Vault")
+    subtabs = st.tabs(["Add New Recipe", "Browse Vault"])
+
+    with subtabs[0]:
         with st.form("recipe_form"):
             name = st.text_input("Recipe Name")
             tags = st.multiselect("Category", ["High Protein", "Low Carb", "Quick", "Meal Prep"])
@@ -248,10 +301,10 @@ elif nav == "Recipe Vault":
                     dm.save_recipe_data({"Name": name, "Tags": ", ".join(tags), "Ingredients": ingredients, "Instructions": instructions})
                     st.success(f"'{name}' saved!")
 
-    with tab2:
+    with subtabs[1]:
         recipes_df = dm.load_recipe_data()
         if not recipes_df.empty:
-            search = st.text_input("🔍 Search", "")
+            search = st.text_input("🔍 Search Recipes", "")
             filtered = recipes_df[recipes_df['Name'].str.contains(search, case=False)]
             for idx, row in filtered.iterrows():
                 with st.expander(f"📖 {row['Name']}"):
@@ -263,8 +316,8 @@ elif nav == "Recipe Vault":
         else:
             st.info("No recipes found. Add one!")
 
-elif nav == "Grocery List":
-    st.title("🛒 Smart Grocery List")
+with tabs[3]: # GROCERY
+    st.header("🛒 Smart Grocery List")
     recipes_df = dm.load_recipe_data()
     
     if not recipes_df.empty:
@@ -287,10 +340,13 @@ elif nav == "Grocery List":
     else:
         st.warning("Add recipes to the vault first!")
 
-elif nav == "Settings":
-    st.title("⚙️ Settings")
+with tabs[4]: # SETTINGS
+    st.header("⚙️ Settings")
     st.write("Configure your external integrations here.")
     key = st.text_input("API Key (for Quotes)", type="password", value=st.session_state.get('api_key', ''))
     if key:
         st.session_state['api_key'] = key
         st.success("API Key saved for this session.")
+    
+    st.divider()
+    st.sidebar.info("Navigation moved to top tabs for better mobile experience.")
