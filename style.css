@@ -1,59 +1,91 @@
 /* Global Styles */
 .stApp {
-    background-color: #f8f9fa;
-    /* Light grey background */
+    background-color: var(--background-color);
+    color: var(--text-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Define colors for Light and Dark modes */
+@media (prefers-color-scheme: light) {
+    :root {
+        --background-color: #f8f9fa;
+        --text-color: #2c3e50;
+        --card-bg: #ffffff;
+        --sidebar-bg: #2c3e50;
+        --sidebar-text: #ffffff;
+        --metric-val-color: #3498db;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background-color: #1e1e1e;
+        --text-color: #e0e0e0;
+        --card-bg: #2d2d2d;
+        --sidebar-bg: #121212;
+        --sidebar-text: #e0e0e0;
+        --metric-val-color: #5dade2;
+    }
+}
+
 /* Card Styling */
-div[data-testid="stMetric"],
-div.stButton>button,
-div[data-testid="stForm"] {
-    background-color: #ffffff;
+div[data-testid="stMetric"], 
+div.stButton > button, 
+div[data-testid="stForm"],
+div.dashboard-card {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
     border-radius: 12px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     padding: 1rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid rgba(128, 128, 128, 0.2);
 }
 
 /* Headers */
-h1,
-h2,
-h3 {
-    color: #2c3e50;
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color) !important;
     font-weight: 700;
 }
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
-    background-color: #2c3e50;
-    color: white;
+    background-color: var(--sidebar-bg);
+}
+
+section[data-testid="stSidebar"] p, 
+section[data-testid="stSidebar"] span, 
+section[data-testid="stSidebar"] label {
+    color: var(--sidebar-text) !important;
 }
 
 /* Buttons */
-div.stButton>button {
+div.stButton > button {
     width: 100%;
     border-radius: 8px;
     font-weight: 600;
     transition: all 0.3s ease;
 }
 
-div.stButton>button:hover {
+div.stButton > button:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Custom Card Class (if used with st.markdown) */
+/* Custom Card Class */
 .dashboard-card {
-    background-color: white;
     padding: 20px;
     border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     margin-bottom: 20px;
 }
 
 .highlight-stat {
     font-size: 2em;
     font-weight: bold;
-    color: #3498db;
+    color: var(--metric-val-color);
+}
+
+/* Fix for dark mode text visibility issues in specific components */
+.stMarkdown p {
+    color: var(--text-color);
 }
