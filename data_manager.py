@@ -3,8 +3,8 @@ import os
 import re
 from datetime import timedelta
 
-AUDIT_FILE = "daily_audit.csv"
-RECIPE_FILE = "recipes.csv"
+AUDIT_FILE = os.path.join(os.path.dirname(__file__), "daily_audit.csv")
+RECIPE_FILE = os.path.join(os.path.dirname(__file__), "recipes.csv")
 
 REQUIRED_COLUMNS = [
     "Date",
