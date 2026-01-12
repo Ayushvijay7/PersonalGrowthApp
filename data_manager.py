@@ -6,6 +6,7 @@ from datetime import timedelta
 AUDIT_FILE = os.path.join(os.path.dirname(__file__), "daily_audit.csv")
 RECIPE_FILE = os.path.join(os.path.dirname(__file__), "recipes.csv")
 PROTEIN_FILE = os.path.join(os.path.dirname(__file__), "protein_log.csv")
+WORKOUT_FILE = os.path.join(os.path.dirname(__file__), "workout_log.csv")
 
 REQUIRED_COLUMNS = [
     "Date",
@@ -20,6 +21,18 @@ REQUIRED_COLUMNS = [
     "Supp_Magnesium",
     "Supp_VitD",
     "Supp_Creatine"
+]
+
+WORKOUT_COLUMNS = [
+    "Date",
+    "Exercise",
+    "Target_Muscle",
+    "Region",
+    "Target_Sets_Reps",
+    "Min_Weight",
+    "Max_Weight",
+    "Reps",
+    "Notes"
 ]
 
 def load_audit_data():
@@ -91,6 +104,22 @@ def get_protein_log_for_date(date_str):
     if df.empty:
         return pd.DataFrame()
     return df[df['Date'] == date_str]
+
+# --- WORKOUT TRACKING LOGIC ---
+def load_workout_log():
+    if not os.path.isfile(WORKOUT_FILE):
+        return pd.DataFrame(columns=WORKOUT_COLUMNS)
+    return pd.read_csv(WORKOUT_FILE)
+
+def save_workout_entry(entry):
+    """
+    Appends a new workout entry to the log.
+    entry: dict matching WORKOUT_COLUMNS
+    """
+    df = load_workout_log()
+    new_df = pd.DataFrame([entry])
+    df = pd.concat([df, new_df], ignore_index=True)
+    df.to_csv(WORKOUT_FILE, index=False)
 
 # --- EXISTING HELPERS ---
 
