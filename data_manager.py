@@ -5,6 +5,7 @@ from datetime import timedelta
 
 AUDIT_FILE = os.path.join(os.path.dirname(__file__), "daily_audit.csv")
 RECIPE_FILE = os.path.join(os.path.dirname(__file__), "recipes.csv")
+PROTEIN_FILE = os.path.join(os.path.dirname(__file__), "protein_log.csv")
 
 REQUIRED_COLUMNS = [
     "Date",
@@ -60,6 +61,38 @@ def save_recipe_data(recipe_entry):
     new_df = pd.DataFrame([recipe_entry])
     df = pd.concat([df, new_df], ignore_index=True)
     df.to_csv(RECIPE_FILE, index=False)
+
+# --- PROTEIN TRACKING LOGIC ---
+def load_protein_log():
+    if not os.path.isfile(PROTEIN_FILE):
+        return pd.DataFrame(columns=["Date", "Food_Name", "Quantity", "Unit", "Protein_g"])
+    return pd.read_csv(PROTEIN_FILE)
+
+def save_protein_entry(entry):
+    """
+    Appends a new protein entry to the log.
+    entry: dict with Date, Food_Name, Quantity, Unit, Protein_g
+    """
+    df = load_protein_log()
+    new_df = pd.DataFrame([entry])
+    df = pd.concat([df, new_df], ignore_index=True)
+    df.to_csv(PROTEIN_FILE, index=False)
+
+def get_daily_protein_total(date_str):
+    df = load_protein_log()
+    if df.empty:
+        return 0.0
+
+    day_entries = df[df['Date'] == date_str]
+    return day_entries['Protein_g'].sum()
+
+def get_protein_log_for_date(date_str):
+    df = load_protein_log()
+    if df.empty:
+        return pd.DataFrame()
+    return df[df['Date'] == date_str]
+
+# --- EXISTING HELPERS ---
 
 def calculate_streaks(df):
     """
