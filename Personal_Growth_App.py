@@ -224,7 +224,7 @@ with tabs[1]: # GYM TRACKER (New)
     st.header("🏋️ Gym Workout Tracker")
 
     st.markdown("### 🎙️ AI Quick Log")
-    st.info("Record your voice or type your workout to auto-fill the form below. Requires OpenAI API Key.")
+    st.info("Record your voice or type your workout to auto-fill the form below. Requires Google Gemini API Key.")
 
     api_key_valid = bool(st.session_state.api_key)
 
@@ -429,7 +429,7 @@ with tabs[5]: # SETTINGS
     st.write("Configure external integrations.")
 
     # Updated Label for Clarity
-    key = st.text_input("OpenAI API Key (for Voice/AI Features & Quotes)", type="password", value=st.session_state.api_key)
+    key = st.text_input("Google Gemini API Key (for Voice/AI Features & Quotes)", type="password", value=st.session_state.api_key)
     if key:
         st.session_state.api_key = key
         st.success("API Key saved!")
