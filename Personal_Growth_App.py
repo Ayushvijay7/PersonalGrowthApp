@@ -13,8 +13,13 @@ import data_manager as dm
 st.set_page_config(page_title="Growth Engine", layout="wide", page_icon="🚀")
 
 # Load CSS
-with open("style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+import os
+css_path = os.path.join(os.path.dirname(__file__), "style.css")
+if os.path.exists(css_path):
+    with open(css_path) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+else:
+    st.warning("style.css not found. UI may look different.")
 
 # --- SESSION STATE INITIALIZATION ---
 if 'cpa_timer_running' not in st.session_state:
@@ -52,21 +57,44 @@ def get_quote(api_key=None):
 def timer_component(key_prefix, label, is_running, elapsed_time):
     st.markdown(f"### {label}")
 
-    # Calculate display time
-    current_session = 0
-    if is_running:
-        current_session = time.time() - st.session_state[f"{key_prefix}_start_time"]
-
-    total_seconds = int(elapsed_time + current_session)
-    hours, rem = divmod(total_seconds, 3600)
-    mins, secs = divmod(rem, 60)
-
-    # Large Timer Display
-    st.markdown(f"""
-    <div style="text-align: center; font-size: 3em; font-family: monospace; color: #2c3e50; background: #ecf0f1; border-radius: 10px; padding: 10px;">
-        {hours:02d}:{mins:02d}:{secs:02d}
+    # JS-driven timer for visual updates without rerunning script
+    # This avoids the "glitchy" feeling of full page refreshes
+    timer_html = f"""
+    <div id="timer_{key_prefix}" style="text-align: center; font-size: 3em; font-family: monospace; color: #2c3e50; background: #ecf0f1; border-radius: 10px; padding: 10px;">
+        Calculating...
     </div>
-    """, unsafe_allow_html=True)
+    <script>
+    function updateTimer() {{
+        const startTime = {st.session_state.get(f"{key_prefix}_start_time", 0)};
+        const elapsedStored = {elapsed_time};
+        const isRunning = {str(is_running).lower()};
+
+        let totalSeconds = elapsedStored;
+        if (isRunning) {{
+            const now = Date.now() / 1000;
+            totalSeconds += (now - startTime);
+        }}
+
+        const hours = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = Math.floor(totalSeconds % 60);
+
+        const pad = (n) => n < 10 ? '0' + n : n;
+        const timeString = `${{pad(hours)}}:${{pad(mins)}}:${{pad(secs)}}`;
+
+        const el = document.getElementById("timer_{key_prefix}");
+        if (el) {{
+            el.innerText = timeString;
+        }}
+    }}
+
+    // Update every second
+    setInterval(updateTimer, 1000);
+    updateTimer(); // Initial call
+    </script>
+    """
+
+    components.html(timer_html, height=100)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -78,6 +106,7 @@ def timer_component(key_prefix, label, is_running, elapsed_time):
     with c2:
         if st.button("II Pause", key=f"{key_prefix}_pause", disabled=not is_running):
             st.session_state[f"{key_prefix}_timer_running"] = False
+            # Add session time to elapsed
             st.session_state[f"{key_prefix}_elapsed"] += time.time() - st.session_state[f"{key_prefix}_start_time"]
             st.rerun()
 
@@ -86,10 +115,6 @@ def timer_component(key_prefix, label, is_running, elapsed_time):
             st.session_state[f"{key_prefix}_timer_running"] = False
             st.session_state[f"{key_prefix}_elapsed"] = 0
             st.rerun()
-
-    if is_running:
-        time.sleep(1)
-        st.rerun()
 
 
 # --- SIDEBAR ---
